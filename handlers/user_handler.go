@@ -197,7 +197,12 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if updateData.Address != "" {
-		updateFields["address"] = updateData.Address
+		tempUser := models.User{Address: updateData.Address}
+		if err := tempUser.HashSensitiveData(); err != nil {
+			http.Error(w, "Failed to hash address", http.StatusInternalServerError)
+			return
+		}
+		updateFields["address"] = tempUser.Address
 	}
 
 	if updateData.Password != "" {
