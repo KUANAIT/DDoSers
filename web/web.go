@@ -1,7 +1,6 @@
 package web
 
 import (
-	"SSE/handlers"
 	"net/http"
 )
 
@@ -9,7 +8,7 @@ func SetupTemplates() {
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	http.HandleFunc("/", handlers.HomePage)
+	//http.HandleFunc("/", handlers.HomePage)
 
 	http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./templates/register.html")

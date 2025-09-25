@@ -4,10 +4,12 @@ import (
 	"SSE/database"
 	"SSE/models"
 	"SSE/sessions"
+	"bytes"
 	"context"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"html/template"
+	"log"
 	"net/http"
 )
 
@@ -45,18 +47,21 @@ func Profile(w http.ResponseWriter, r *http.Request) {
 
 	tmpl, err := template.ParseFiles("templates/profile.html")
 	if err != nil {
-		http.Error(w, "Failed to load template", http.StatusInternalServerError)
+		log.Printf("template parse error: %v", err)
+		http.Error(w, "Failed to load template: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	iinSet := len(user.IIN) > 0 && user.IIN != ""
 	identityCardSet := len(user.IdentityCard) > 0 && user.IdentityCard != ""
+	addressSet := len(user.Address) > 0 && user.Address != ""
 
-	err = tmpl.Execute(w, struct {
+	data := struct {
 		FirstName       string
 		LastName        string
 		Birthday        string
 		Address         string
+		AddressSet      bool
 		ID              string
 		Admin           bool
 		IIN             string
@@ -70,6 +75,7 @@ func Profile(w http.ResponseWriter, r *http.Request) {
 		LastName:        user.LastName,
 		Birthday:        user.Birthday.Format("January 2, 2006"),
 		Address:         user.Address,
+		AddressSet:      addressSet,
 		ID:              userID,
 		Admin:           user.Admin,
 		IIN:             user.IIN,
@@ -78,8 +84,15 @@ func Profile(w http.ResponseWriter, r *http.Request) {
 		IdentityCardSet: identityCardSet,
 		CreatedAt:       user.CreatedAt.Format("January 2, 2006 15:04:05"),
 		UpdatedAt:       user.UpdatedAt.Format("January 2, 2006 15:04:05"),
-	})
-	if err != nil {
-		http.Error(w, "Failed to render page", http.StatusInternalServerError)
 	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		log.Printf("template execute error: %v", err)
+		http.Error(w, "Failed to render page: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = buf.WriteTo(w)
 }

@@ -2,6 +2,7 @@ package routes
 
 import (
 	"SSE/handlers"
+	"SSE/middleware"
 	"net/http"
 )
 
@@ -13,5 +14,6 @@ func RegisterRoutes() {
 	http.HandleFunc("/users/delete", handlers.DeleteUser)
 	http.HandleFunc("/loginuser", handlers.LoginCustomer)
 	http.HandleFunc("/profile", handlers.Profile)
+	http.HandleFunc("/edit-profile", middleware.AuthRequired(handlers.EditProfile))
 
 }
