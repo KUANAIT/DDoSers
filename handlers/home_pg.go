@@ -63,7 +63,7 @@ func HomePage(w http.ResponseWriter, r *http.Request) {
 		UserName      string
 	}{
 		Authenticated: isAuthenticated,
-		UserName:      user.GetFullName(),
+		UserName:      user.Name,
 	}
 
 	err = tmpl.Execute(w, data)

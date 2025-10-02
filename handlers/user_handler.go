@@ -17,13 +17,9 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var userData struct {
-		IIN          string `json:"iin"`
-		IdentityCard string `json:"identity_card"`
-		FirstName    string `json:"first_name"`
-		LastName     string `json:"last_name"`
-		Birthday     string `json:"birthday"`
-		Password     string `json:"password"`
-		Address      string `json:"address"`
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&userData); err != nil {
@@ -31,40 +27,28 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	birthday, err := time.Parse("2006-01-02", userData.Birthday)
-	if err != nil {
-		http.Error(w, "Invalid birthday format. Use YYYY-MM-DD", http.StatusBadRequest)
-		return
-	}
-
-	if userData.IIN == "" || userData.IdentityCard == "" || userData.FirstName == "" ||
-		userData.LastName == "" || userData.Password == "" || userData.Address == "" {
-		http.Error(w, "IIN, Identity Card, First Name, Last Name, Birthday, Password, and Address are required fields", http.StatusBadRequest)
+	if userData.Name == "" || userData.Email == "" || userData.Password == "" {
+		http.Error(w, "Name, Email, and Password are required fields", http.StatusBadRequest)
 		return
 	}
 
 	user := models.User{
-		IIN:          userData.IIN,
-		IdentityCard: userData.IdentityCard,
-		FirstName:    userData.FirstName,
-		LastName:     userData.LastName,
-		Birthday:     birthday,
-		Password:     userData.Password,
-		Address:      userData.Address,
+		Name:             userData.Name,
+		Email:            userData.Email,
+		Password:         userData.Password,
+		MembershipStatus: models.StatusActive,
+		JoinDate:         time.Now(),
+		TotalVisits:      0,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
+
+	user.GenerateMemberID()
 
 	if err := user.HashPassword(); err != nil {
 		http.Error(w, "Failed to hash password: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	if err := user.HashSensitiveData(); err != nil {
-		http.Error(w, "Failed to hash sensitive data: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	user.CreatedAt = time.Now()
-	user.UpdatedAt = time.Now()
 
 	collection, err := database.GetCollection("SSE", "users")
 	if err != nil {
@@ -72,18 +56,11 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var existingUsers []models.User
-	cursor, err := collection.Find(r.Context(), bson.M{})
+	var existingUser models.User
+	err = collection.FindOne(r.Context(), bson.M{"email": user.Email}).Decode(&existingUser)
 	if err == nil {
-		defer cursor.Close(r.Context())
-		cursor.All(r.Context(), &existingUsers)
-
-		for _, existingUser := range existingUsers {
-			if existingUser.CheckIIN(userData.IIN) {
-				http.Error(w, "User with this IIN already exists", http.StatusConflict)
-				return
-			}
-		}
+		http.Error(w, "User with this email already exists", http.StatusConflict)
+		return
 	}
 
 	result, err := collection.InsertOne(r.Context(), user)
@@ -96,18 +73,16 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	responseUser := struct {
 		ID        string    `json:"id"`
-		FirstName string    `json:"first_name"`
-		LastName  string    `json:"last_name"`
-		Birthday  string    `json:"birthday"`
-		Address   string    `json:"address"`
+		Name      string    `json:"name"`
+		Email     string    `json:"email"`
 		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
 	}{
 		ID:        user.ID.Hex(),
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
-		Birthday:  user.Birthday.Format("2006-01-02"),
-		Address:   user.Address,
+		Name:      user.Name,
+		Email:     user.Email,
 		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -168,13 +143,9 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var updateData struct {
-		FirstName    string    `json:"first_name"`
-		LastName     string    `json:"last_name"`
-		Birthday     time.Time `json:"birthday"`
-		Password     string    `json:"password"`
-		Address      string    `json:"address"`
-		IIN          string    `json:"iin"`
-		IdentityCard string    `json:"identity_card"`
+		Name     string `json:"name"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&updateData); err != nil {
@@ -184,25 +155,12 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	updateFields := bson.M{}
 
-	if updateData.FirstName != "" {
-		updateFields["first_name"] = updateData.FirstName
+	if updateData.Name != "" {
+		updateFields["name"] = updateData.Name
 	}
 
-	if updateData.LastName != "" {
-		updateFields["last_name"] = updateData.LastName
-	}
-
-	if !updateData.Birthday.IsZero() {
-		updateFields["birthday"] = updateData.Birthday
-	}
-
-	if updateData.Address != "" {
-		tempUser := models.User{Address: updateData.Address}
-		if err := tempUser.HashSensitiveData(); err != nil {
-			http.Error(w, "Failed to hash address", http.StatusInternalServerError)
-			return
-		}
-		updateFields["address"] = tempUser.Address
+	if updateData.Email != "" {
+		updateFields["email"] = updateData.Email
 	}
 
 	if updateData.Password != "" {
@@ -212,24 +170,6 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		updateFields["password"] = tempUser.Password
-	}
-
-	if updateData.IIN != "" {
-		tempUser := models.User{IIN: updateData.IIN}
-		if err := tempUser.HashSensitiveData(); err != nil {
-			http.Error(w, "Failed to hash IIN", http.StatusInternalServerError)
-			return
-		}
-		updateFields["iin"] = tempUser.IIN
-	}
-
-	if updateData.IdentityCard != "" {
-		tempUser := models.User{IdentityCard: updateData.IdentityCard}
-		if err := tempUser.HashSensitiveData(); err != nil {
-			http.Error(w, "Failed to hash identity card", http.StatusInternalServerError)
-			return
-		}
-		updateFields["identity_card"] = tempUser.IdentityCard
 	}
 
 	if len(updateFields) == 0 {

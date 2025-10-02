@@ -16,4 +16,10 @@ func RegisterRoutes() {
 	http.HandleFunc("/profile", handlers.Profile)
 	http.HandleFunc("/edit-profile", middleware.AuthRequired(handlers.EditProfile))
 
+	http.HandleFunc("/membership/plans", handlers.GetMembershipPlans)
+	http.HandleFunc("/membership/select", handlers.SelectMembershipPlan)
+	http.HandleFunc("/membership/user", handlers.GetUserMembership)
+	http.HandleFunc("/membership", handlers.MembershipPlansPage)
+	http.HandleFunc("/membership/update-plans", handlers.UpdateMembershipPlans)
+
 }

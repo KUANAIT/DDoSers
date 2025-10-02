@@ -45,6 +45,14 @@ func Profile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var membershipPlan models.MembershipPlan
+	if !user.MembershipPlanID.IsZero() {
+		planCollection, err := database.GetCollection("SSE", "membership_plans")
+		if err == nil {
+			planCollection.FindOne(context.TODO(), bson.M{"_id": user.MembershipPlanID}).Decode(&membershipPlan)
+		}
+	}
+
 	tmpl, err := template.ParseFiles("templates/profile.html")
 	if err != nil {
 		log.Printf("template parse error: %v", err)
@@ -52,38 +60,38 @@ func Profile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	iinSet := len(user.IIN) > 0 && user.IIN != ""
-	identityCardSet := len(user.IdentityCard) > 0 && user.IdentityCard != ""
-	addressSet := len(user.Address) > 0 && user.Address != ""
-
 	data := struct {
-		FirstName       string
-		LastName        string
-		Birthday        string
-		Address         string
-		AddressSet      bool
-		ID              string
-		Admin           bool
-		IIN             string
-		IdentityCard    string
-		IINSet          bool
-		IdentityCardSet bool
-		CreatedAt       string
-		UpdatedAt       string
+		Name             string
+		Email            string
+		ID               string
+		MemberID         string
+		MembershipStatus string
+		MembershipPlan   string
+		MembershipPrice  float64
+		MembershipExpiry string
+		JoinDate         string
+		TotalVisits      int
+		DaysUntilExpiry  int
+		IsActiveMember   bool
+		HasMembership    bool
+		CreatedAt        string
+		UpdatedAt        string
 	}{
-		FirstName:       user.FirstName,
-		LastName:        user.LastName,
-		Birthday:        user.Birthday.Format("January 2, 2006"),
-		Address:         user.Address,
-		AddressSet:      addressSet,
-		ID:              userID,
-		Admin:           user.Admin,
-		IIN:             user.IIN,
-		IdentityCard:    user.IdentityCard,
-		IINSet:          iinSet,
-		IdentityCardSet: identityCardSet,
-		CreatedAt:       user.CreatedAt.Format("January 2, 2006 15:04:05"),
-		UpdatedAt:       user.UpdatedAt.Format("January 2, 2006 15:04:05"),
+		Name:             user.Name,
+		Email:            user.Email,
+		ID:               userID,
+		MemberID:         user.MemberID,
+		MembershipStatus: string(user.MembershipStatus),
+		MembershipPlan:   membershipPlan.Name,
+		MembershipPrice:  membershipPlan.Price,
+		MembershipExpiry: user.MembershipExpiry.Format("January 2, 2006"),
+		JoinDate:         user.JoinDate.Format("January 2, 2006"),
+		TotalVisits:      user.TotalVisits,
+		DaysUntilExpiry:  user.DaysUntilExpiry(),
+		IsActiveMember:   user.IsActiveMember(),
+		HasMembership:    !user.MembershipPlanID.IsZero(),
+		CreatedAt:        user.CreatedAt.Format("January 2, 2006 15:04:05"),
+		UpdatedAt:        user.UpdatedAt.Format("January 2, 2006 15:04:05"),
 	}
 
 	var buf bytes.Buffer

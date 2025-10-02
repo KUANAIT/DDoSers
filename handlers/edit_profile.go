@@ -55,17 +55,13 @@ func EditProfile(w http.ResponseWriter, r *http.Request) {
 		}
 
 		data := struct {
-			FirstName string
-			LastName  string
-			Birthday  string
-			Address   string
-			ID        string
+			Name  string
+			Email string
+			ID    string
 		}{
-			FirstName: user.FirstName,
-			LastName:  user.LastName,
-			Birthday:  user.Birthday.Format("2006-01-02"),
-			Address:   user.Address,
-			ID:        userID,
+			Name:  user.Name,
+			Email: user.Email,
+			ID:    userID,
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -81,37 +77,34 @@ func EditProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		firstName := r.FormValue("first_name")
-		lastName := r.FormValue("last_name")
-		birthdayStr := r.FormValue("birthday")
-		address := r.FormValue("address")
+		name := r.FormValue("name")
+		email := r.FormValue("email")
 		newPassword := r.FormValue("password")
+		currentPassword := r.FormValue("current_password")
 
 		updateFields := bson.M{}
 
-		if firstName != "" {
-			updateFields["first_name"] = firstName
+		if name != "" {
+			updateFields["name"] = name
 		}
-		if lastName != "" {
-			updateFields["last_name"] = lastName
-		}
-		if birthdayStr != "" {
-			birthday, err := time.Parse("2006-01-02", birthdayStr)
-			if err != nil {
-				http.Error(w, "Invalid birthday format. Use YYYY-MM-DD", http.StatusBadRequest)
-				return
-			}
-			updateFields["birthday"] = birthday
-		}
-		if address != "" {
-			tmp := models.User{Address: address}
-			if err := tmp.HashSensitiveData(); err != nil {
-				http.Error(w, "Failed to hash address", http.StatusInternalServerError)
-				return
-			}
-			updateFields["address"] = tmp.Address
+		if email != "" {
+			updateFields["email"] = email
 		}
 		if newPassword != "" {
+			if currentPassword == "" {
+				http.Redirect(w, r, "/edit-profile?error=required_current_password", http.StatusSeeOther)
+				return
+			}
+			var user models.User
+			err := collection.FindOne(context.TODO(), bson.M{"_id": objID}).Decode(&user)
+			if err != nil {
+				http.Error(w, "User not found", http.StatusNotFound)
+				return
+			}
+			if !user.CheckPassword(currentPassword) {
+				http.Redirect(w, r, "/edit-profile?error=incorrect_password", http.StatusSeeOther)
+				return
+			}
 			hashed, err := auth.HashPassword(newPassword)
 			if err != nil {
 				http.Error(w, "Failed to hash password", http.StatusInternalServerError)
@@ -127,13 +120,9 @@ func EditProfile(w http.ResponseWriter, r *http.Request) {
 
 		updateFields["updated_at"] = time.Now()
 
-		result, err := collection.UpdateOne(r.Context(), bson.M{"_id": objID}, bson.M{"$set": updateFields})
+		_, err := collection.UpdateOne(r.Context(), bson.M{"_id": objID}, bson.M{"$set": updateFields})
 		if err != nil {
 			http.Error(w, "Failed to update profile", http.StatusInternalServerError)
-			return
-		}
-		if result.MatchedCount == 0 {
-			http.Error(w, "User not found", http.StatusNotFound)
 			return
 		}
 

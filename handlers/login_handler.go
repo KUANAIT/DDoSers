@@ -16,7 +16,7 @@ func LoginCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var credentials struct {
-		IIN      string `json:"iin"`
+		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 
@@ -31,31 +31,15 @@ func LoginCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var users []models.User
-	cursor, err := collection.Find(r.Context(), bson.M{})
-	if err != nil {
-		http.Error(w, "Invalid IIN or password", http.StatusUnauthorized)
-		return
-	}
-	defer cursor.Close(r.Context())
-
-	if err = cursor.All(r.Context(), &users); err != nil {
-		http.Error(w, "Invalid IIN or password", http.StatusUnauthorized)
-		return
-	}
-
 	var user models.User
-	found := false
-	for _, u := range users {
-		if u.CheckIIN(credentials.IIN) && u.CheckPassword(credentials.Password) {
-			user = u
-			found = true
-			break
-		}
+	err = collection.FindOne(r.Context(), bson.M{"email": credentials.Email}).Decode(&user)
+	if err != nil {
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		return
 	}
 
-	if !found {
-		http.Error(w, "Invalid IIN or password", http.StatusUnauthorized)
+	if !user.CheckPassword(credentials.Password) {
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 

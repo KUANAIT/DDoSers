@@ -2,22 +2,25 @@ package models
 
 import (
 	"SSE/auth"
+	"fmt"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"time"
 )
 
 type User struct {
-	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	IIN          string             `json:"iin" bson:"iin"`
-	IdentityCard string             `json:"identity_card" bson:"identity_card"`
-	FirstName    string             `json:"first_name" bson:"first_name"`
-	LastName     string             `json:"last_name" bson:"last_name"`
-	Birthday     time.Time          `json:"birthday" bson:"birthday"`
-	Password     string             `json:"password" bson:"password"`
-	Address      string             `json:"address" bson:"address"`
-	Admin        bool               `json:"admin" bson:"admin,omitempty"`
-	CreatedAt    time.Time          `json:"created_at" bson:"created_at"`
-	UpdatedAt    time.Time          `json:"updated_at" bson:"updated_at"`
+	ID               primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	Name             string             `json:"name" bson:"name"`
+	Email            string             `json:"email" bson:"email"`
+	Password         string             `json:"password" bson:"password"`
+	MembershipPlanID primitive.ObjectID `json:"membership_plan_id,omitempty" bson:"membership_plan_id,omitempty"`
+	MembershipStatus MembershipStatus   `json:"membership_status" bson:"membership_status"`
+	MembershipExpiry time.Time          `json:"membership_expiry" bson:"membership_expiry"`
+	MemberID         string             `json:"member_id" bson:"member_id"`
+	JoinDate         time.Time          `json:"join_date" bson:"join_date"`
+	LastCheckIn      time.Time          `json:"last_check_in,omitempty" bson:"last_check_in,omitempty"`
+	TotalVisits      int                `json:"total_visits" bson:"total_visits"`
+	CreatedAt        time.Time          `json:"created_at" bson:"created_at"`
+	UpdatedAt        time.Time          `json:"updated_at" bson:"updated_at"`
 }
 
 func (u *User) HashPassword() error {
@@ -29,40 +32,27 @@ func (u *User) HashPassword() error {
 	return nil
 }
 
-func (u *User) HashSensitiveData() error {
-	hashedIIN, err := auth.HashPassword(u.IIN)
-	if err != nil {
-		return err
-	}
-	u.IIN = hashedIIN
-
-	hashedIdentityCard, err := auth.HashPassword(u.IdentityCard)
-	if err != nil {
-		return err
-	}
-	u.IdentityCard = hashedIdentityCard
-
-	hashedAddress, err := auth.HashPassword(u.Address)
-	if err != nil {
-		return err
-	}
-	u.Address = hashedAddress
-
-	return nil
-}
-
 func (u *User) CheckPassword(providedPassword string) bool {
 	return auth.CheckPassword(u.Password, providedPassword)
 }
 
-func (u *User) CheckIIN(providedIIN string) bool {
-	return auth.CheckPassword(u.IIN, providedIIN)
+func (u *User) GenerateMemberID() {
+	year := time.Now().Year()
+	timestamp := time.Now().Unix()
+	u.MemberID = fmt.Sprintf("GYM-%d-%06d", year, timestamp%1000000)
 }
 
-func (u *User) CheckIdentityCard(providedIdentityCard string) bool {
-	return auth.CheckPassword(u.IdentityCard, providedIdentityCard)
+func (u *User) IsActiveMember() bool {
+	return u.MembershipStatus == StatusActive && time.Now().Before(u.MembershipExpiry)
 }
 
-func (u *User) GetFullName() string {
-	return u.FirstName + " " + u.LastName
+func (u *User) DaysUntilExpiry() int {
+	if u.MembershipExpiry.IsZero() {
+		return 0
+	}
+	days := int(time.Until(u.MembershipExpiry).Hours() / 24)
+	if days < 0 {
+		return 0
+	}
+	return days
 }
